@@ -1,0 +1,11 @@
+*logs*
+*.json
+*__py*
+*.last
+*dist*
+*build*
+*egg-info*
+*folder
+*.log
+.idea*
+.venv*
