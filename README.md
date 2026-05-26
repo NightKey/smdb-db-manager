@@ -7,39 +7,41 @@ This manager provides a robust, thread-safe, and version-controlled mechanism fo
 
 # Quick Start Guide
 
-1. To use the `DBManager`, you must subclass it and implement the required abstract methods (`migrate_db` and `init_db`).
+1. Create a class with a super class `DBManager`.
 2. Use the class method `DBManager.create(...)` to initialize and wait for the database connection to become fully operational.
 3. Override `migrate_db` to handle schema/version upgrades, and override `init_db` to create and populate default tables.
 4. To make creating database calls easier, there are wrappers to handle database opening and closing, handling exceptions with returning a value or raising the exception or timing the method.
 These wrappers are logged with `smdb-logger`. To disable those logs, the logger provides a `log_disabled` value.
 
+> [!IMPORTANT]
+> If you are not using the `create` method, the initialization should be run using an async loop.
+
 # Usable Methods Reference
 
 The `DBManager` exposes several methods for database operations, version control, and lifecycle management.
 
-| Function Name                                        | Arguments                                | Types                                          | Description                                                                                                                                                                           |
-|:-----------------------------------------------------|:-----------------------------------------|:-----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| 
-| [close](#close)                                      |                                          |                                                | Gracefully stops and marks the database connection as closed/stopped.                                                                                                                 |
-| [create](#create)                                    | cls, logger, data_path, db_name, version | type[T], Logger, str, str, [Version](#version) | (Class Method) Asynchronous factory method to create and fully initialize aDBManagerinstance.                                                                                         |
-| [migrate_db](#migrate_db)                            | current, target                          | [Version](#version), [Version](#version)       | (Abstract Method) Must be implemented by subclasses to handle schema and data migrations from the current version to the target version.                                              |
-| [init_db](#init_db)                                  |                                          |                                                | (Abstract Method) Must be implemented by subclasses to perform all necessary initial setup, such as creating default tables and filling default data.                                 |
-| [update_version](#update_version)                    | version                                  | [Version](#version)                            | Updates the database's version number to the provided version.                                                                                                                        |
-| [get_version](#get_version)                          |                                          |                                                | Retrieves and returns the currently recorded version of the database.                                                                                                                 |
-| [async_timed](#async_timed)                          | func                                     | Callable                                       | Decorator to time the execution of an async function.                                                                                                                                 |
-| [async_database_safe](#async_database_safe)          | func                                     | Callable                                       | Decorator that handles acquiring the lock, checking database status, connecting, executing the wrapped function, and ensuring disconnection/lock release, with robust error handling. |
-| [async_required_argument](#async_required_argument)  | arguments                                | List[str]                                      | Decorator to enforce that at least one provided keyword argument must be present from the specified list.                                                                             |
-| [async_during_init](#async_during_init)              | func                                     | Callable                                       | Decorator helper to signal that a method is safe to run during the initial database setup phase.                                                                                      |
-| [with_fail_value](#with_fail_value)                  | fail_value                               | Any                                            | Decorator helper to set a default failure value for decorated methods that use @async_database_safe.                                                                                  |
-| [fail_with_exception](#fail_with_exception)          | func                                     | Callable                                       | Decorator helper to indicate that a method failure should capture the exception.                                                                                                      |
-| [__prepare_versioned_db](#__prepare_versioned_db)    |                                          |                                                | (Internal) Handles initial creation of the version table and inserts the initial version.                                                                                             |
-| [__ensure_version](#__ensure_version)                | version                                  | [Version](#version)                            | (Internal) Checks the database version against the required version and triggers migration if necessary.                                                                              |
-| [__check_version](#__check_version)                  | version                                  | [Version](#version)                            | (Internal) Reads the current version from the database and compares it to the target version.                                                                                         |
-| [__finish_startup](#__finish_startup)                |                                          |                                                | (Internal) Sets the database status to RUNNING once initialization is complete.                                                                                                       |
+| Function Name                                       | Arguments                                | Types                                          | Description                                                                                                                                                                                                     |
+|:----------------------------------------------------|:-----------------------------------------|:-----------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| 
+| [create](#create)                                   | cls, logger, data_path, db_name, version | type[T], Logger, str, str, [Version](#version) | (Class Method) Asynchronous factory method to create and fully initialize aDBManagerinstance.                                                                                                                   |
+| [ensure_ready](#ensure_ready)                       |                                          |                                                | Waits until database status changes from `STARTING` to `RUNNING` or `FAILED`. Raisis the exception raised during initialization. Proviced for other initialization flow than the class method [create](#create) |
+| [update_version](#update_version)                   | version                                  | [Version](#version)                            | Updates the database's version number to the provided version.                                                                                                                                                  |
+| [get_version](#get_version)                         |                                          |                                                | Retrieves and returns the currently recorded version of the database.                                                                                                                                           |
+| [close](#close)                                     |                                          |                                                | Gracefully stops and marks the database connection as closed/stopped.                                                                                                                                           |
+| [migrate_db](#migrate_db)                           | current, target                          | [Version](#version), [Version](#version)       | (Abstract Method) Must be implemented by subclasses to handle schema and data migrations from the current version to the target version.                                                                        |
+| [init_db](#init_db)                                 |                                          |                                                | (Abstract Method) Must be implemented by subclasses to perform all necessary initial setup, such as creating default tables and filling default data.                                                           |
+| [async_database_safe](#async_database_safe)         | func                                     | Callable                                       | Decorator that handles acquiring the lock, checking database status, connecting, executing the wrapped function, and ensuring disconnection/lock release, with robust error handling.                           |
+| [async_timed](#async_timed)                         | func                                     | Callable                                       | Decorator to time the execution of an async function.                                                                                                                                                           |
+| [async_during_init](#async_during_init)             | func                                     | Callable                                       | Decorator helper to signal that a method is safe to run during the initial database setup phase.                                                                                                                |
+| [async_required_argument](#async_required_argument) | arguments                                | List[str]                                      | Decorator to enforce that at least one provided keyword argument must be present from the specified list.                                                                                                       |
+| [with_fail_value](#with_fail_value)                 | fail_value                               | Any                                            | Decorator helper to set a default failure value for decorated methods that use @async_database_safe.                                                                                                            |
+| [fail_with_exception](#fail_with_exception)         | func                                     | Callable                                       | Decorator helper to indicate that a method failure should capture the exception.                                                                                                                                |
+| [__prepare_versioned_db](#__prepare_versioned_db)   |                                          |                                                | (Internal) Handles initial creation of the version table and inserts the initial version.                                                                                                                       |
+| [__ensure_version](#__ensure_version)               | version                                  | [Version](#version)                            | (Internal) Checks the database version against the required version and triggers migration if necessary.                                                                                                        |
+| [__check_version](#__check_version)                 | version                                  | [Version](#version)                            | (Internal) Reads the current version from the database and compares it to the target version.                                                                                                                   |
+| [__finish_startup](#__finish_startup)               |                                          |                                                | (Internal) Sets the database status to RUNNING once initialization is complete.                                                                                                                                 |
 ---
 
-# Detailed Method Descriptions
-
-> ### Class and Initialization Flow
+# Class and Initialization Methods
 
 ## create
 > [!NOTE]
@@ -54,7 +56,7 @@ A utility method called by [create](#create).
 It waits asynchronously until the internal status transitions from `STARTING` to `RUNNING`. 
 After waiting, it handles and re-raises any exception that occurred during the initial setup task (`init_task`).
 
-> ### Core Database Operations
+# Core Database Operations
 
 ## update_version
 > [!NOTE]
@@ -77,7 +79,7 @@ It executes a `SELECT` query and uses `Version.from_db()` to reconstitute a `Ver
 Manages the shutdown sequence. It attempts to acquire the lock, sets the status to `STOPPING`, and then sets it to `STOPPED`. 
 This signals other methods that database operations should cease.
 
-> ### Abstract/Mandatory Overrides (Implementations Required)
+# Abstract/Mandatory Overrides (Implementations Required)
 
 ## migrate_db
 > [!NOTE]
@@ -92,7 +94,7 @@ You must use this when [__ensure_version](#__ensure_version) detects that `curre
 
 This abstract method *must* be implemented. It is responsible for executing the initial setup: creating all application-specific tables (beyond the version table) and populating any mandatory default data required for the application to run.
 
-> ### Decorator Guidance
+# Decorator Guidance
 
 ## async_database_safe
 **Decorator**
@@ -126,7 +128,7 @@ This decorator allows you to specify a value to be returned in case of failure. 
 
 Similar to [with_fail_value](#with_fail_value). Instead of returning a value, it raises the exception returned by the wrapped call.
 
-> ### Internal functions
+# Internal functions
 
 > [!WARNING]
 > These methods are only explained for the clarity of the base class. You should not use or modify them.
@@ -151,6 +153,8 @@ It returns a tuple: (is_match, [Version](#version)).
 ## __finish_startup
 This method is called after the database initialization and migration are complete.
 It sets the status to `RUNNING`
+
+---
 
 # Additional classes
 
