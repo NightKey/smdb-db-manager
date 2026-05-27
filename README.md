@@ -100,6 +100,7 @@ This abstract method *must* be implemented. It is responsible for executing the 
 **Decorator**
 > [!IMPORTANT]
 > **Use this on every method that touches the database.**
+> This decorator should be the top decorator for all database operations
 
 This wrapper manages the entire database interaction context: it acquires the lock, checks the operational status (`RUNNING`), establishes the connection (`self.db = await aiosqlite.connect(...)`), ensures foreign keys are active, runs the protected code in a `try...finally` block (guaranteeing the connection is closed and the lock is released), and handles exceptions.
 
