@@ -34,3 +34,6 @@ class Version:
             int(row[1]),
             int(row[2])
         )
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"

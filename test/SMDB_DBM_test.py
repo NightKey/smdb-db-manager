@@ -55,6 +55,13 @@ class SMDBDBMTest(unittest.TestCase):
         with (self.assertRaises(ValueError)):
             loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db"))
 
+    def test_5_ensure_can_migrate_database(self):
+        _logger.header("TEST 5")
+        loop = asyncio.new_event_loop()
+        db = loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 2, 0)))
+        loop.run_until_complete(db.ensure_ready())
+        self.assertEqual(Version(0, 2, 0), loop.run_until_complete(db.get_version()))
+
     @classmethod
     def tearDownClass(cls):
         remove(path.join('.', "testDB.db"))

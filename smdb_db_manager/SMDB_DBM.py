@@ -178,8 +178,9 @@ class DBManager(ABC):
             if not result:
                 self.status = DBStatus.FAILED
                 raise Exception(f"Failed to migrate DB to version {version}")
-        self.logger.info(f"Database at {path.abspath(self.db_path)} ready")
-        self.status = DBStatus.RUNNING
+            self.logger.info(f"Database at {path.abspath(self.db_path)} updated to version {version}")
+            await self.update_version(version)
+        await self.__finish_startup()
 
     @async_timed
     async def __prepare_versioned_db(self, version: Version):
@@ -236,6 +237,7 @@ class DBManager(ABC):
         return db_version == version, db_version
 
     @async_database_safe
+    @async_during_init
     @async_timed
     async def update_version(self, version: Version) -> bool:
         """
