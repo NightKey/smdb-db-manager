@@ -9,7 +9,7 @@ import aiosqlite
 from aiosqlite import Connection
 from smdb_logger import Logger
 
-from smdb_db_manager.utils import Timer, DBStatus, ClosedException, Version, DefaultTableNames
+from smdb_db_manager.utils import Timer, DBStatus, ClosedException, Version, DefaultTableNames, DBObject
 
 class DBManager(ABC):
     lock: Lock = Lock()
@@ -290,6 +290,17 @@ class DBManager(ABC):
         result = cls(logger, data_path, db_name, version)
         await result.ensure_ready()
         return result
+
+    def generate_create[T: DBObject](self, table: type[T]) -> str:
+        return f"""CREATE TABLE {table.name()} (
+        {table.get_create()}
+        ) STRICT;"""
+
+    def generate_select[T: DBObject](self, table: type[T], where: str | None = None) -> str:
+        return f"""SELECT {', '.join(table.get_keys())} FROM {table.name()}"""
+
+    def generate_insert(self, table: DBObject) -> str:
+        return f"""INSERT INTO {table.name()} ()"""
 
     @async_database_safe
     @async_during_init
