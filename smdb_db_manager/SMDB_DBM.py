@@ -69,7 +69,7 @@ class DBManager(ABC):
             fail_exception_index: int | str | None = getattr(func, "fail_exception_index", None)
             if cls.status > DBStatus.RUNNING:
                 cls.logger.exception(
-                    ClosedException(f"Function {func.__name__} called after database stop was called or the database failed!"))
+                    ClosedException(f"Function {func.__name__} called after database was in {cls.status.name} state!"))
                 return fail_value
             if cls.status != DBStatus.RUNNING and not during_init:
                 cls.logger.trace(f"Called {func.__name__} called while db not ready, waiting")
@@ -79,7 +79,7 @@ class DBManager(ABC):
             await cls.lock.acquire()
             if cls.status > DBStatus.STOPPING:
                 cls.logger.exception(
-                    ClosedException(f"Function {func.__name__} called after database was stopped or failed!"))
+                    ClosedException(f"Function {func.__name__} called after database was in {cls.status.name} state!"))
                 cls.lock.release()
                 return fail_value
             cls.logger.debug(f"Running {func.__name__} with keyword arguments: {kwargs}")
@@ -267,8 +267,8 @@ class DBManager(ABC):
     @async_timed
     async def close(self) -> None:
         """
-
-        :return:
+        Sets the database to be closing, then waits for all pending operations to finish, and lastly, sets the database to be closed.
+        Because the database connection is not held open, this flag is sufficient to close the database.
         """
         if self.status > DBStatus.RUNNING:
             self.logger.warning(f"Close called while status is {self.status.name}")
@@ -283,7 +283,8 @@ class DBManager(ABC):
 
     @classmethod
     async def create[T: DBManager](cls: type[T], logger: Logger, data_path: str, db_name: str = "database.db", version: Version = Version(0, 0, 1)) -> T:
-        """Async wrapper for creating the class.
+        """
+        Async wrapper for creating the class.
         :param logger: 'smdb_logger' for detailed logging when using the wrappers
         :param data_path: The path for the data folder where the database will be held
         :param db_name: The name of the database file.
