@@ -26,7 +26,7 @@ class DBManager(ABC):
         Times the provided async function's runtime.
         """
         @wraps(func)
-        async def async_timed_wrapper(self: DBManager, *args, **kwargs):
+        async def async_timed_wrapper(self: 'DBManager', *args, **kwargs):
             timer = Timer()
             result = await func(self, *args, **kwargs)
             self.logger.debug(f"Function {func.__name__} returned {result}")
@@ -43,7 +43,7 @@ class DBManager(ABC):
         """
         def async_required_argument_decorator(func):
             @wraps(func)
-            async def wrapper(self: DBManager, *args, **kwargs):
+            async def wrapper(self: 'DBManager', *args, **kwargs):
                 for argument in arguments:
                     if argument in kwargs:
                         break
@@ -63,7 +63,7 @@ class DBManager(ABC):
         This wrapper will fail the call when database is in 'stopping', 'stopped' or 'failed' status, so no threads will be hanging.
         """
         @wraps(func)
-        async def async_database_safe_wrapper(cls: DBManager, *args, **kwargs):
+        async def async_database_safe_wrapper(cls: 'DBManager', *args, **kwargs):
             during_init: bool = getattr(func, "during_init", False)
             fail_value: Any = getattr(func, "fail_value", False)
             fail_exception_index: int | str | None = getattr(func, "fail_exception_index", None)
@@ -282,7 +282,7 @@ class DBManager(ABC):
         self.logger.trace("Close lock released")
 
     @classmethod
-    async def create[T: DBManager](cls: type[T], logger: Logger, data_path: str, db_name: str = "database.db", version: Version = Version(0, 0, 1)) -> T:
+    async def create[T: 'DBManager'](cls: type[T], logger: Logger, data_path: str, db_name: str = "database.db", version: Version = Version(0, 0, 1)) -> T:
         """
         Async wrapper for creating the class.
         :param logger: 'smdb_logger' for detailed logging when using the wrappers
