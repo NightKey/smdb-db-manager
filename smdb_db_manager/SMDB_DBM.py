@@ -138,12 +138,17 @@ class DBManager(ABC):
     def db_path(self) -> str:
         return path.join(self.data_path, self.db_name)
 
-    def __init__(self, logger: Logger, data_path: str, db_name: str = "database.db", version: Version = Version(0, 0, 1)):
+    @property
+    @abstractmethod
+    def current_version(self) -> Version:
+        pass
+
+    def __init__(self, logger: Logger, data_path: str, db_name: str = "database.db", version: Version | None = None):
         """
         :param logger: 'smdb_logger' for detailed logging when using the wrappers
         :param data_path: The path for the data folder where the database will be held:
         :param db_name: The name of the database file.
-        :param version: The version of the database to use. Will be used to migrate to newer versions.
+        :param version: The version of the database to use. If not set, the database property 'current_version' will be used. Will be used to migrate to newer versions.
         """
         self.data_path = data_path
         self.db_name = db_name
@@ -152,9 +157,9 @@ class DBManager(ABC):
         self.init_task: asyncio.Task | None = None
         loop = asyncio.get_event_loop()
         if path.exists(self.db_path):
-            self.init_task = loop.create_task(self.__ensure_version(version))
+            self.init_task = loop.create_task(self.__ensure_version(version or self.current_version))
             return
-        self.init_task = loop.create_task(self.__prepare_versioned_db(version))
+        self.init_task = loop.create_task(self.__prepare_versioned_db(version or self.current_version))
 
     async def ensure_ready(self) -> None:
         """
@@ -282,13 +287,13 @@ class DBManager(ABC):
         self.logger.trace("Close lock released")
 
     @classmethod
-    async def create[T: 'DBManager'](cls: type[T], logger: Logger, data_path: str, db_name: str = "database.db", version: Version = Version(0, 0, 1)) -> T:
+    async def create[T: 'DBManager'](cls: type[T], logger: Logger, data_path: str, db_name: str = "database.db", version: Version | None = None) -> T:
         """
         Async wrapper for creating the class.
         :param logger: 'smdb_logger' for detailed logging when using the wrappers
         :param data_path: The path for the data folder where the database will be held
         :param db_name: The name of the database file.
-        :param version: The version of the database to use. Will be used to migrate to newer versions.
+        :param version: The version of the database to use. If not set, the database property 'current_version' will be used. Will be used to migrate to newer versions.
         :return: The class created"""
         result = cls(logger, data_path, db_name, version)
         await result.ensure_ready()

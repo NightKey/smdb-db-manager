@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 from os import path, remove
+import atexit
 
 from smdb_logger import Logger, LEVEL
 
@@ -9,6 +10,10 @@ from smdb_db_manager.utils import Version
 
 
 class TestDB(DBManager):
+    @property
+    def current_version(self) -> Version:
+        return Version(0, 0, 1)
+
     @DBManager.async_database_safe
     @DBManager.async_during_init
     @DBManager.async_timed
@@ -64,4 +69,7 @@ class SMDBDBMTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        remove(path.join('.', "testDB.db"))
+        if path.exists(path.join('.', "testDB.db")):
+            remove(path.join('.', "testDB.db"))
+
+atexit.register(SMDBDBMTest.tearDownClass)

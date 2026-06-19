@@ -14,15 +14,16 @@ This manager provides a robust, thread-safe, and version-controlled mechanism fo
 These wrappers are logged with `smdb-logger`. To disable those logs, the logger provides a `log_disabled` value.
 
 > [!IMPORTANT]
-> If you are not using the `create` method, the initialization should be run using an async loop.
+> If you are not using the `create` method, the initialization should be run using an already working async loop.
 
 # Usable Methods Reference
 
 The `DBManager` exposes several methods for database operations, version control, and lifecycle management.
 
 | Function Name                                       | Arguments                                | Types                                          | Description                                                                                                                                                                                                     |
-|:----------------------------------------------------|:-----------------------------------------|:-----------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| 
-| [create](#create)                                   | cls, logger, data_path, db_name, version | type[T], Logger, str, str, [Version](#version) | (Class Method) Asynchronous factory method to create and fully initialize aDBManagerinstance.                                                                                                                   |
+|:----------------------------------------------------|:-----------------------------------------|:-----------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [current_version](#current_version)                 |                                          |                                                | (Property) The current version of the database.                                                                                                                                                                 | 
+| [create](#create)                                   | cls, logger, data_path, db_name, version | type[T], Logger, str, str, [Version](#version) | (Class Method) Asynchronous factory method to create and fully initialize aDBManagerinstance. When no version is provided, the class property [current_version](#current_version) will be used as default.      |
 | [ensure_ready](#ensure_ready)                       |                                          |                                                | Waits until database status changes from `STARTING` to `RUNNING` or `FAILED`. Raisis the exception raised during initialization. Proviced for other initialization flow than the class method [create](#create) |
 | [update_version](#update_version)                   | version                                  | [Version](#version)                            | Updates the database's version number to the provided version.                                                                                                                                                  |
 | [get_version](#get_version)                         |                                          |                                                | Retrieves and returns the currently recorded version of the database.                                                                                                                                           |
@@ -42,6 +43,10 @@ The `DBManager` exposes several methods for database operations, version control
 ---
 
 # Class and Initialization Methods
+
+## current_version
+
+This property is the default database version value. It needs to be overridden in subclasses to specify a different version.
 
 ## create
 > [!NOTE]
