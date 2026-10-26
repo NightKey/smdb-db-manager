@@ -3,7 +3,8 @@ from abc import abstractmethod, ABC
 from asyncio import Lock
 from functools import wraps
 from typing import Any, List, Tuple
-from os import path, mkdir
+from os import path, mkdir, rename, remove
+from shutil import copyfile
 
 import aiosqlite
 from aiosqlite import Connection
@@ -139,6 +140,10 @@ class DBManager(ABC):
         return path.join(self.data_path, self.db_name)
 
     @property
+    def db_backup_path(self) -> str:
+        return path.join(self.data_path, f"{self.current_version}.{self.db_name}.db")
+
+    @property
     @abstractmethod
     def current_version(self) -> Version:
         pass
@@ -179,12 +184,21 @@ class DBManager(ABC):
             if isinstance(current_version, BaseException):
                 self.status = DBStatus.FAILED
                 raise current_version
-            result = await self.migrate_db(current_version, version)
-            if not result:
-                self.status = DBStatus.FAILED
-                raise Exception(f"Failed to migrate DB to version {version}")
-            self.logger.info(f"Database at {path.abspath(self.db_path)} updated to version {version}")
-            await self.update_version(version)
+            self.logger.info(f"Creating database backup")
+            copyfile(path.abspath(self.db_path), path.abspath(self.db_backup_path))
+            try:
+                result = await self.migrate_db(current_version, version)
+                if not result or isinstance(result, BaseException):
+                    self.status = DBStatus.FAILED
+                    self.logger.warning("Database update failed, rolling back")
+                    remove(path.abspath(self.db_path))
+                    rename(path.abspath(self.db_backup_path), path.abspath(self.db_path))
+                    raise Exception(f"Failed to migrate DB to version {version}")
+                self.logger.info(f"Database at {path.abspath(self.db_path)} updated to version {version}")
+                await self.update_version(version)
+            finally:
+                if path.exists(self.db_backup_path):
+                    remove(path.abspath(self.db_backup_path))
         await self.__finish_startup()
 
     @async_timed

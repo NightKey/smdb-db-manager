@@ -27,6 +27,8 @@ class TestDB(DBManager):
     @DBManager.fail_with_exception
     async def migrate_db(self, current: Version, target: Version) -> bool:
         self.logger.info("Migrate db called for TestDB")
+        if target == Version(0, 3, 0):
+            raise Exception("Migration error")
         return True
 
 _logger = Logger(log_to_console=True, level=LEVEL.TRACE, use_caller_name=True)
@@ -51,7 +53,6 @@ class SMDBDBMTest(unittest.TestCase):
         _logger.header("TEST 3")
         loop = asyncio.new_event_loop()
         db = loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db"))
-        loop.run_until_complete(db.ensure_ready())
         self.assertTrue(loop.run_until_complete(db.update_version(Version(0, 1, 0))))
 
     def test_4_fails_when_required_version_smaller_than_already_present(self):
@@ -63,6 +64,14 @@ class SMDBDBMTest(unittest.TestCase):
     def test_5_ensure_can_migrate_database(self):
         _logger.header("TEST 5")
         loop = asyncio.new_event_loop()
+        db = loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 2, 0)))
+        self.assertEqual(Version(0, 2, 0), loop.run_until_complete(db.get_version()))
+
+    def test_6_ensure_migration_failure_saves_db(self):
+        _logger.header("TEST 5")
+        loop = asyncio.new_event_loop()
+        with self.assertRaises(Exception):
+            loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 3, 0)))
         db = loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 2, 0)))
         loop.run_until_complete(db.ensure_ready())
         self.assertEqual(Version(0, 2, 0), loop.run_until_complete(db.get_version()))
