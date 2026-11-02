@@ -21,6 +21,7 @@ class DBManager(ABC):
     logger: Logger
     data_path: str
     db_name: str
+    __keep_backup__: bool = False
 
     # <editor-fold desc="Wrappers">
     @staticmethod
@@ -201,7 +202,7 @@ class DBManager(ABC):
                 self.logger.info(f"Database at {path.abspath(self.db_path)} updated to version {version}")
                 await self.update_version(version)
             finally:
-                if path.exists(self.db_backup_path):
+                if path.exists(self.db_backup_path) and not self.__keep_backup__:
                     remove(path.abspath(self.db_backup_path))
         await self.__finish_startup()
 
@@ -391,6 +392,9 @@ class DBManager(ABC):
             query = f.read()
         await self.db.executescript(query)
         await self.db.commit()
+
+    def keep_versioned_backup(self) -> None:
+        self.__keep_backup__ = True
 
     @async_database_safe
     @async_during_init
