@@ -98,6 +98,7 @@ class SMDBDBMTest(unittest.TestCase):
         self.assertTrue(isinstance(result, Exception))
         self.assertEqual("Path test.sql is outside of allowed path of /Data/GitHub/smdb-db-manager/test/data/testDB.db", str(result))
         os.remove("test.sql")
+        os.remove("data/testDB.db")
 
     @classmethod
     def tearDownClass(cls):

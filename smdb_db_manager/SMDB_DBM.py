@@ -1,5 +1,4 @@
 import asyncio
-import os
 from abc import abstractmethod, ABC
 from asyncio import Lock
 from functools import wraps
@@ -22,6 +21,7 @@ class DBManager(ABC):
     data_path: str
     db_name: str
     __keep_backup__: bool = False
+    __database_version__: Version
 
     # <editor-fold desc="Wrappers">
     @staticmethod
@@ -95,11 +95,12 @@ class DBManager(ABC):
                 return await func(cls, *args, **kwargs)
             except BaseException as ex:
                 cls.logger.error(f"Exception during {func.__name__}", ex)
-                if fail_exception_index is not None:
-                    if isinstance(fail_value, (list, tuple, dict)):
-                        fail_value[fail_exception_index] = ex
-                    else:
-                        fail_value = ex
+                if fail_exception_index is None:
+                    raise ex
+                if isinstance(fail_value, (list, tuple, dict)):
+                    fail_value[fail_exception_index] = ex
+                else:
+                    fail_value = ex
                 return fail_value
             finally:
                 cls.logger.debug(f"Closing db connection for {func.__name__}")
@@ -140,18 +141,20 @@ class DBManager(ABC):
 
     # </editor-fold>
 
+    # <editor-fold desc="Properties">
     @property
     def db_path(self) -> str:
         return path.join(self.data_path, self.db_name)
 
     @property
     def db_backup_path(self) -> str:
-        return path.join(self.data_path, f"{self.current_version}.{self.db_name}.db")
+        return path.join(self.data_path, f"{self.db_name[:-3]}.{str(self.__database_version__).replace('.', '-')}.db")
 
     @property
     @abstractmethod
     def current_version(self) -> Version:
         pass
+    # </editor-fold>
 
     def __init__(self, logger: Logger, data_path: str, db_name: str = "database.db", version: Version | None = None):
         """
@@ -161,7 +164,7 @@ class DBManager(ABC):
         :param version: The version of the database to use. If not set, the database property 'current_version' will be used. Will be used to migrate to newer versions.
         """
         self.data_path = path.abspath(data_path)
-        self.db_name = db_name
+        self.db_name = db_name if db_name.endswith(".db") else db_name + ".db"
         self.logger = logger
         self.status = DBStatus.STARTING
         self.init_task: asyncio.Task | None = None
@@ -184,15 +187,16 @@ class DBManager(ABC):
         if _exception is not None: raise _exception
 
     async def __ensure_version(self, version: Version):
-        correct, current_version = await self.__check_version(version)
+        try:
+            correct = await self.__check_version(version)
+        except BaseException as ex:
+            self.status = DBStatus.FAILED
+            raise ex
         if not correct:
-            if isinstance(current_version, BaseException):
-                self.status = DBStatus.FAILED
-                raise current_version
             self.logger.info(f"Creating database backup")
             copyfile(path.abspath(self.db_path), path.abspath(self.db_backup_path))
             try:
-                result = await self.migrate_db(current_version, version)
+                result = await self.migrate_db(self.__database_version__, version)
                 if not result or isinstance(result, BaseException):
                     self.status = DBStatus.FAILED
                     self.logger.warning("Database update failed, rolling back")
@@ -244,21 +248,22 @@ class DBManager(ABC):
 
     @async_database_safe
     @async_during_init
-    @with_fail_value([None, None])
-    @fail_with_exception
     @async_timed
-    async def __check_version(self, version: Version) -> Tuple[bool, Version]:
-        rows = await self.db.execute_fetchall(
-            f"""
-            SELECT major, minor, patch FROM {DefaultTableNames.Version.name}
-            """
+    async def __check_version(self, version: Version) -> bool:
+        rows = list(
+                await self.db.execute_fetchall(
+                f"""
+                SELECT major, minor, patch FROM {DefaultTableNames.Version.name}
+                """
+            )
         )
         if len(rows) != 1:
             raise ValueError(f"Database version contained {len(rows)} element, but 1 was expected!\nElements: {rows}")
         db_version = Version.from_db(rows[0])
+        self.__database_version__ = db_version
         if db_version > version:
             raise ValueError(f"DB version {db_version} is bigger than required version {version}")
-        return db_version == version, db_version
+        return db_version == version
 
     @async_database_safe
     @async_during_init
