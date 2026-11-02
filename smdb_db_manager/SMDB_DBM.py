@@ -1,10 +1,12 @@
 import asyncio
+import os
 from abc import abstractmethod, ABC
 from asyncio import Lock
 from functools import wraps
 from typing import Any, List, Tuple
 from os import path, mkdir, rename, remove
 from shutil import copyfile
+from sqlite3 import Row
 
 import aiosqlite
 from aiosqlite import Connection
@@ -29,10 +31,12 @@ class DBManager(ABC):
         @wraps(func)
         async def async_timed_wrapper(self: 'DBManager', *args, **kwargs):
             timer = Timer()
-            result = await func(self, *args, **kwargs)
-            self.logger.debug(f"Function {func.__name__} returned {result}")
-            self.logger.trace(f"Function {func.__name__} finished under {timer.stop(1_000_000)} ms")
-            return result
+            try:
+                result = await func(self, *args, **kwargs)
+                self.logger.debug(f"Function {func.__name__} returned {result}")
+                return result
+            finally:
+                self.logger.trace(f"Function {func.__name__} finished under {timer.stop(1_000_000)} ms")
 
         return async_timed_wrapper
 
@@ -155,7 +159,7 @@ class DBManager(ABC):
         :param db_name: The name of the database file.
         :param version: The version of the database to use. If not set, the database property 'current_version' will be used. Will be used to migrate to newer versions.
         """
-        self.data_path = data_path
+        self.data_path = path.abspath(data_path)
         self.db_name = db_name
         self.logger = logger
         self.status = DBStatus.STARTING
@@ -312,6 +316,81 @@ class DBManager(ABC):
         result = cls(logger, data_path, db_name, version)
         await result.ensure_ready()
         return result
+
+    def ensure_path_valid(self, path_to_check: str) -> None:
+        """
+        Ensures the path_to_check is within the db_path and is available. Throws if not.
+        :param path_to_check: The path to check.
+        :return: None
+        """
+        real_path = path.abspath(path_to_check)
+        if not path.exists(real_path):
+            raise FileNotFoundError(f"Path {path_to_check} does not exist")
+        if path.commonpath([self.db_path, real_path]) != self.data_path:
+            raise Exception(f"Path {path_to_check} is outside of allowed path of {self.db_path}")
+
+    @async_database_safe
+    @async_during_init
+    @async_timed
+    @fail_with_exception
+    async def run_sql_fetch_script(self, sql_path: str) -> List[Row]:
+        """
+        This will read and execute the SQL file provided in the `path` parameter.
+        This is only for queries.
+
+        For internal use (initialization and migration), use the unsafe version
+        :param sql_path: Path to the SQL file.
+        :return: Result of the query (List[Row])
+        """
+        return await self.run_sql_fetch_script_unsafe(sql_path)
+
+    @async_timed
+    async def run_sql_fetch_script_unsafe(self, sql_path: str) -> List[Row]:
+        """
+        This will read and execute the SQL file provided in the `path` parameter.
+        This is only for queries.
+
+        This expects to be called by a **@DBManager.async_database_safe** decorated function.
+        :param sql_path: Path to the SQL file.
+        :return: Result of the query (List[Row])
+        """
+        self.ensure_path_valid(sql_path)
+        query = ""
+        with open(sql_path, "r") as f:
+            query = f.read()
+        return list(await self.db.execute_fetchall(query))
+
+    @async_database_safe
+    @async_during_init
+    @async_timed
+    @fail_with_exception
+    async def run_sql_update_script(self, sql_path: str) -> None:
+        """
+        This will read and execute the SQL file provided in the `path` parameter.
+        This is only for updates with no return values.
+
+        For internal use (initialization and migration), use the unsafe version
+        :param sql_path: Path to the SQL file.
+        :return: None
+        """
+        await self.run_sql_update_script_unsafe(sql_path)
+
+    @async_timed
+    async def run_sql_update_script_unsafe(self, sql_path: str) -> None:
+        """
+        This will read and execute the SQL file provided in the `path` parameter.
+        This is only for updates with no return values.
+
+        This expects to be called by a **@DBManager.async_database_safe** decorated function.
+        :param sql_path: Path to the SQL file.
+        :return: None
+        """
+        self.ensure_path_valid(sql_path)
+        query = ""
+        with open(sql_path, "r") as f:
+            query = f.read()
+        await self.db.executescript(query)
+        await self.db.commit()
 
     @async_database_safe
     @async_during_init

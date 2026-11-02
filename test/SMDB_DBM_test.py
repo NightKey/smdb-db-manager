@@ -1,4 +1,5 @@
 import asyncio
+import os
 import unittest
 from os import path, remove
 import atexit
@@ -29,6 +30,8 @@ class TestDB(DBManager):
         self.logger.info("Migrate db called for TestDB")
         if target == Version(0, 3, 0):
             raise Exception("Migration error")
+        elif target == Version(0, 4, 0):
+            await self.run_sql_update_script_unsafe("data/create.sql")
         return True
 
 _logger = Logger(log_to_console=True, level=LEVEL.TRACE, use_caller_name=True)
@@ -68,13 +71,33 @@ class SMDBDBMTest(unittest.TestCase):
         self.assertEqual(Version(0, 2, 0), loop.run_until_complete(db.get_version()))
 
     def test_6_ensure_migration_failure_saves_db(self):
-        _logger.header("TEST 5")
+        _logger.header("TEST 6")
         loop = asyncio.new_event_loop()
         with self.assertRaises(Exception):
             loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 3, 0)))
         db = loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 2, 0)))
         loop.run_until_complete(db.ensure_ready())
         self.assertEqual(Version(0, 2, 0), loop.run_until_complete(db.get_version()))
+
+    def test_7_ensure_can_use_sql_file_update_for_migration(self):
+        _logger.header("TEST 7")
+        loop = asyncio.new_event_loop()
+        db = loop.run_until_complete(TestDB.create(_logger, '.', db_name="testDB.db", version=Version(0, 4, 0)))
+        self.assertEqual(Version(0, 4, 0), loop.run_until_complete(db.get_version()))
+        rows = loop.run_until_complete(db.run_sql_fetch_script("data/read.sql"))
+        self.assertEqual(1, rows[0][0])
+        self.assertEqual("TEST", rows[0][1])
+
+    def test_8_ensure_fails_when_path_not_in_the_db_folder(self):
+        _logger.header("TEST 8")
+        loop = asyncio.new_event_loop()
+        db = loop.run_until_complete(TestDB.create(_logger, './data', db_name="testDB.db"))
+        with open("test.sql", "w") as f:
+            f.write("")
+        result = loop.run_until_complete(db.run_sql_update_script("test.sql"))
+        self.assertTrue(isinstance(result, Exception))
+        self.assertEqual("Path test.sql is outside of allowed path of /Data/GitHub/smdb-db-manager/test/data/testDB.db", str(result))
+        os.remove("test.sql")
 
     @classmethod
     def tearDownClass(cls):
