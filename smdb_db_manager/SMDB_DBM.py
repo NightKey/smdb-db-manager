@@ -336,7 +336,7 @@ class DBManager(ABC):
     @fail_with_exception
     async def run_sql_fetch_script(self, sql_path: str) -> List[Row]:
         """
-        This will read and execute the SQL file provided in the `path` parameter.
+        This will read and execute the SQL file provided in the `sql_path` parameter.
         This is only for queries.
 
         For internal use (initialization and migration), use the unsafe version
@@ -348,7 +348,7 @@ class DBManager(ABC):
     @async_timed
     async def run_sql_fetch_script_unsafe(self, sql_path: str) -> List[Row]:
         """
-        This will read and execute the SQL file provided in the `path` parameter.
+        This will read and execute the SQL file provided in the `sql_path` parameter.
         This is only for queries.
 
         This expects to be called by a **@DBManager.async_database_safe** decorated function.
@@ -367,7 +367,7 @@ class DBManager(ABC):
     @fail_with_exception
     async def run_sql_update_script(self, sql_path: str) -> None:
         """
-        This will read and execute the SQL file provided in the `path` parameter.
+        This will read and execute the SQL file provided in the `sql_path` parameter.
         This is only for updates with no return values.
 
         For internal use (initialization and migration), use the unsafe version
@@ -379,7 +379,7 @@ class DBManager(ABC):
     @async_timed
     async def run_sql_update_script_unsafe(self, sql_path: str) -> None:
         """
-        This will read and execute the SQL file provided in the `path` parameter.
+        This will read and execute the SQL file provided in the `sql_path` parameter.
         This is only for updates with no return values.
 
         This expects to be called by a **@DBManager.async_database_safe** decorated function.
